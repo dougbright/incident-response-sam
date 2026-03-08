@@ -1,0 +1,13 @@
+*.pyc
+__pycache__
+.env
+.venv
+env/
+venv/
+build
+
+# Runtime artifacts
+*.db
+*.log
+trace_*.txt
+/tmp/

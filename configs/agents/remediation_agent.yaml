@@ -1,0 +1,96 @@
+# Solace Agent Mesh Agent Configuration
+
+log:
+  stdout_log_level: INFO
+  log_file_level: DEBUG
+  log_file: a2a_agent.log
+
+!include ../shared_config.yaml
+
+apps:
+  - name: "RemediationAgent__app"
+    app_base_path: .
+    app_module: solace_agent_mesh.agent.sac.app
+    broker:
+      <<: *broker_connection
+
+    app_config:
+      namespace: "${NAMESPACE}"
+      supports_streaming: true
+      agent_name: "RemediationAgent"
+      display_name: "Remediation Agent"
+      model: *general_model
+
+      instruction: |
+        You are the Remediation Agent for ABC Financial's incident response system. You receive two inputs: a triage assessment from the Triage Agent and runbook metadata from the Runbook Agent (which includes the runbook filename and reason for selection).
+
+        FIRST: Read the runbook file specified in the Runbook Agent's output using the read_file tool. The file will be in the knowledge base directory. Then use the runbook content along with the triage assessment to produce your IAP.
+
+        Your IAP must include:
+
+        1. CHANGE CLASSIFICATION: Classify the remediation as Standard, Normal, or Emergency per SOX change management requirements. Provide your reasoning. Standard changes are pre-approved low-risk actions (service restarts of stateless APIs, scaling within defined bounds). Normal changes require CAB review. Emergency changes bypass normal approval but require retroactive review.
+
+        2. BLAST RADIUS: Estimate the impact scope. What does this service do? Who depends on it? What is the transaction volume or user impact during the outage? Be specific with numbers and downstream effects.
+
+        3. SEQUENCED ACTION STEPS: Provide specific commands and steps the engineer should execute. Include hostnames, regions, and process names from the triage assessment. Do not repeat generic runbook steps — contextualize them for this specific incident.
+
+        4. ROLLBACK PATH: If the Triage Agent flagged a recent deployment correlation, recommend rollback as the primary remediation path. Include the deployment ID, commit SHA, and previous version. If no deployment was correlated, default to the runbook remediation steps with escalation triggers.
+
+        5. ESCALATION CRITERIA: Define when the engineer should escalate — time thresholds, failure conditions, or scope expansion triggers.
+
+        Always cite the source runbook and triage assessment in your output. The IAP must be specific enough that any on-call engineer can execute it without additional context.
+
+      tools:
+        - tool_type: builtin-group
+          group_name: artifact_management
+        - tool_type: mcp
+          connection_params:
+            type: stdio
+            command: npx
+            args:
+            - -y
+            - '@modelcontextprotocol/server-filesystem'
+            - /Users/dbright/solace/incident-response/knowledge-base
+            timeout: 30
+
+      session_service:
+        type: "sql"
+        default_behavior: "PERSISTENT"
+        database_url: "${REMEDIATION_AGENT_DATABASE_URL, sqlite:///remediation_agent.db}"
+      artifact_service: *default_artifact_service
+
+      # Raise MCP thresholds so runbook file content is returned directly to the
+      # LLM instead of being auto-saved as an artifact. Without this, files >4KB
+      # get replaced with embed references that corrupt the workflow JSON output.
+      mcp_tool_response_save_threshold_bytes: 500000
+      mcp_tool_llm_return_max_bytes: 500000
+
+      artifact_handling_mode: "reference"
+      enable_embed_resolution: true
+      enable_artifact_content_instruction: true
+      data_tools_config: *default_data_tools_config
+      auto_summarization: *default_auto_summarization
+
+      # Agent Card Definition
+      agent_card:
+        description: |
+          Produces Incident Action Plans (IAPs) for on-call engineers. Contextualizes generic runbook steps for the specific incident, classifies changes per SOX standards, estimates blast radius, and provides rollback paths.
+        defaultInputModes: [text]
+        defaultOutputModes: [text, file]
+        skills:
+          - id: incident_action_plan
+            name: Incident Action Plan
+            description: "Produces contextualized Incident Action Plans (IAPs) with SOX change classification, blast radius analysis, sequenced remediation steps, rollback paths, and escalation criteria."
+          - id: runbook_reader
+            name: Runbook Reader
+            description: "Reads runbook files from the knowledge base to contextualize generic procedures for the specific incident."
+
+      # Discovery & Communication
+      agent_card_publishing:
+        interval_seconds: 10
+      agent_discovery:
+        enabled: true
+      inter_agent_communication:
+        allow_list: ["*"]
+        deny_list: []
+        request_timeout_seconds: 600

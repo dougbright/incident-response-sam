@@ -1,0 +1,132 @@
+# Incident Response Workflow
+# Fan-out: Triage + Runbook in parallel
+# Fan-out: Initial notification + Remediation in parallel
+# Fan-in: Final notification after remediation
+
+!include ../shared_config.yaml
+
+apps:
+  - name: IncidentResponseWorkflow
+    app_module: solace_agent_mesh.workflow.app
+    broker:
+      <<: *broker_connection
+
+    app_config:
+      namespace: "${NAMESPACE}"
+      name: "IncidentResponse"
+      max_workflow_execution_time_seconds: 900
+      default_node_timeout_seconds: 300
+      artifact_service: *default_artifact_service
+
+      workflow:
+        description: >
+          Processes monitoring alerts through a parallel incident response
+          pipeline. Triage and runbook lookup run concurrently, an initial
+          stakeholder notification fires as soon as triage completes, and
+          a full sitrep is generated after the remediation plan is ready.
+        version: "1.0.0"
+
+        input_schema:
+          type: object
+          properties:
+            alert:
+              type: string
+              description: "The monitoring alert payload to process"
+          required: [alert]
+
+        nodes:
+          # ── Parallel Stage 1: Triage + Runbook run concurrently ──
+
+          - id: triage
+            type: agent
+            agent_name: "TriageAgent"
+            input:
+              content: "{{workflow.input.alert}}"
+            instruction: >
+              Triage this monitoring alert. Parse the alert payload, classify
+              the incident priority (P1-P4), check for recent deployment
+              correlation, and produce a structured triage assessment.
+
+          - id: runbook
+            type: agent
+            agent_name: "RunbookAgent"
+            input:
+              content: "{{workflow.input.alert}}"
+            instruction: >
+              Analyze this monitoring alert and find the matching runbook
+              from the knowledge base. Read the runbook index first, match
+              based on the symptoms described in the alert (e.g. high CPU,
+              error rate spike, disk usage, latency), and return the full
+              runbook content with attribution.
+
+          # ── Parallel Stage 2: Initial notification + Remediation ──
+          # Both depend on triage. notification_initial fires immediately.
+          # Remediation also waits for runbook (fan-in).
+
+          - id: notification_initial
+            type: agent
+            agent_name: "NotificationAgent"
+            depends_on: [triage]
+            input:
+              content: "{{triage.output}}"
+            instruction: >
+              Generate an INITIAL stakeholder notification based on the
+              triage assessment. This is the first communication — keep it
+              brief. Confirm we are aware of the incident, state the
+              severity and affected service, note that investigation is
+              underway, and promise a follow-up with the remediation plan.
+              This should read like a Slack message, not a full report.
+
+          - id: remediation
+            type: agent
+            agent_name: "RemediationAgent"
+            depends_on: [triage, runbook]
+            input:
+              content:
+                concat:
+                  - "TRIAGE ASSESSMENT:\n"
+                  - "{{triage.output}}"
+                  - "\n\nRUNBOOK:\n"
+                  - "{{runbook.output}}"
+            instruction: >
+              Using the triage assessment and the runbook content provided,
+              produce a specific Incident Action Plan (IAP) for the on-call
+              engineer. Include change classification, blast radius, sequenced
+              action steps, rollback path, and escalation criteria.
+
+          # ── Final Stage: Full sitrep after remediation is ready ──
+
+          - id: notification_final
+            type: agent
+            agent_name: "NotificationAgent"
+            depends_on: [triage, remediation]
+            input:
+              content:
+                concat:
+                  - "TRIAGE ASSESSMENT:\n"
+                  - "{{triage.output}}"
+                  - "\n\nINCIDENT ACTION PLAN:\n"
+                  - "{{remediation.output}}"
+            instruction: >
+              Generate the FULL stakeholder sitrep now that the remediation
+              plan is ready. Include incident summary, severity and impact,
+              current status (remediation in progress), responding team,
+              estimated timeline, and when to expect the next update.
+              This is the detailed follow-up to the initial notification.
+
+        output_mapping:
+          triage_assessment: "{{triage.output}}"
+          runbook: "{{runbook.output}}"
+          initial_notification: "{{notification_initial.output}}"
+          incident_action_plan: "{{remediation.output}}"
+          stakeholder_sitrep: "{{notification_final.output}}"
+
+        skills:
+          - id: "incident_response"
+            name: "Incident Response"
+            description: >
+              Processes a monitoring alert through the full incident response
+              pipeline: triage, runbook lookup, remediation planning, and
+              stakeholder notification. Triage and runbook run in parallel,
+              and an initial notification fires immediately after triage.
+            tags: ["incident", "alert", "triage", "remediation"]

@@ -1,0 +1,84 @@
+# Solace Agent Mesh Agent Configuration
+
+log:
+  stdout_log_level: INFO
+  log_file_level: DEBUG
+  log_file: a2a_agent.log
+
+!include ../shared_config.yaml
+
+apps:
+  - name: "RunbookAgent__app"
+    app_base_path: .
+    app_module: solace_agent_mesh.agent.sac.app
+    broker:
+      <<: *broker_connection
+
+    app_config:
+      namespace: "${NAMESPACE}"
+      supports_streaming: true
+      agent_name: "RunbookAgent"
+      display_name: "Runbook Agent"
+      model: *general_model
+
+      instruction: |
+        You are the Runbook Agent for ABC Financial's incident response system. Your job is to identify the correct runbook for a given incident type.
+
+        When you receive a triage assessment or incident description:
+
+          1. Read the file index.md to review the runbook manifest. This lists all available runbooks with their symptoms, keywords, and applicable service types.
+          2. Based on the incident symptoms and alert type, select the best matching runbook from the index.
+          3. Produce your output with only two fields: runbook_filename and reasoning. Do NOT read the actual runbook file — another agent will do that.
+
+        If no runbook matches the incident, say so explicitly.
+      
+      tools: 
+        - tool_type: builtin-group
+          group_name: artifact_management
+        - tool_type: mcp
+          connection_params:
+            type: stdio
+            command: npx
+            args:
+            - -y
+            - '@modelcontextprotocol/server-filesystem'
+            - /Users/dbright/solace/incident-response/knowledge-base
+            timeout: 30
+
+      session_service: 
+        type: "sql"
+        default_behavior: "PERSISTENT"
+        database_url: "${RUNBOOK_AGENT_DATABASE_URL, sqlite:///runbook_agent.db}"
+      artifact_service: *default_artifact_service
+      
+      # Raise MCP thresholds so file content is returned directly to the LLM
+      # instead of being auto-saved as an artifact with embed references.
+      mcp_tool_response_save_threshold_bytes: 500000
+      mcp_tool_llm_return_max_bytes: 500000
+
+      artifact_handling_mode: "reference"
+      enable_embed_resolution: true
+      enable_artifact_content_instruction: true
+      data_tools_config: *default_data_tools_config
+      auto_summarization: *default_auto_summarization
+
+      # Agent Card Definition
+      agent_card:
+        description: |
+          Searches the knowledge base for matching runbooks based on incident symptoms. Reads the runbook index, selects the best match, and returns the full runbook content with attribution.
+        defaultInputModes: [text] 
+        defaultOutputModes: [text, file] 
+        skills:
+          - id: runbook_lookup
+            name: Runbook Lookup
+            description: "Searches the knowledge base index for the runbook that best matches the incident symptoms and alert type. Returns the runbook filename and reasoning."
+      
+      # Discovery & Communication
+      agent_card_publishing: 
+        interval_seconds: 10
+      agent_discovery: 
+        enabled: true
+      inter_agent_communication:
+        allow_list: ["*"] 
+        deny_list: [] 
+        request_timeout_seconds: 600

@@ -1,0 +1,78 @@
+# Solace Agent Mesh Agent Configuration
+
+log:
+  stdout_log_level: INFO
+  log_file_level: DEBUG
+  log_file: a2a_agent.log
+
+!include ../shared_config.yaml
+
+apps:
+  - name: "NotificationAgent__app"
+    app_base_path: .
+    app_module: solace_agent_mesh.agent.sac.app
+    broker:
+      <<: *broker_connection
+
+    app_config:
+      namespace: "${NAMESPACE}"
+      supports_streaming: true
+      agent_name: "NotificationAgent"
+      display_name: "Notification Agent"
+      model: *lightweight_model
+
+      instruction: |
+        You are the Notification Agent for ABC Financial's incident response system. You receive the Incident Action Plan (IAP) from the Remediation Agent and the triage assessment. Your job is to produce a clear, non-technical stakeholder sitrep suitable for posting to Slack or a status page.
+
+        Your sitrep must include:
+
+        1. INCIDENT SUMMARY: One or two sentences describing what happened in plain language. No technical jargon — write for a VP or compliance officer who needs to understand impact, not implementation.
+
+        2. SEVERITY AND IMPACT: The incident priority, which services are affected, and the estimated business impact (transaction volume, user-facing impact, revenue exposure).
+
+        3. CURRENT STATUS: What is being done right now. Is the team investigating, executing remediation, or monitoring post-fix?
+
+        4. RESPONDING TEAM: Which team owns the affected service and is leading the response.
+
+        5. ESTIMATED TIMELINE: When do we expect resolution or next update? Be realistic.
+
+        6. NEXT UPDATE: When stakeholders should expect the next communication.
+
+        Keep the tone calm, professional, and factual. Do not speculate. Do not include specific commands, hostnames, or technical remediation details — those belong in the IAP, not the sitrep.
+
+      tools:
+        - tool_type: builtin-group
+          group_name: artifact_management
+
+      session_service:
+        type: "sql"
+        default_behavior: "PERSISTENT"
+        database_url: "${NOTIFICATION_AGENT_DATABASE_URL, sqlite:///notification_agent.db}"
+      artifact_service: *default_artifact_service
+
+      artifact_handling_mode: "reference"
+      enable_embed_resolution: true
+      enable_artifact_content_instruction: true
+      data_tools_config: *default_data_tools_config
+      auto_summarization: *default_auto_summarization
+
+      # Agent Card Definition
+      agent_card:
+        description: |
+          Generates plain-language stakeholder sitreps from incident data. Formats incident summaries, impact assessments, and status updates suitable for Slack, email, or status pages.
+        defaultInputModes: [text]
+        defaultOutputModes: [text, file]
+        skills:
+          - id: stakeholder_sitrep
+            name: Stakeholder Sitrep
+            description: "Generates plain-language situation reports for stakeholders — summarizes incident impact, current status, responding team, and expected timeline without technical jargon."
+
+      # Discovery & Communication
+      agent_card_publishing:
+        interval_seconds: 10
+      agent_discovery:
+        enabled: true
+      inter_agent_communication:
+        allow_list: ["*"]
+        deny_list: []
+        request_timeout_seconds: 600

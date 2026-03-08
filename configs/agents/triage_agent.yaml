@@ -1,0 +1,85 @@
+# Solace Agent Mesh Agent Configuration
+
+log:
+  stdout_log_level: INFO
+  log_file_level: DEBUG
+  log_file: a2a_agent.log
+
+!include ../shared_config.yaml
+
+apps:
+  - name: "TriageAgent__app"
+    app_base_path: .
+    app_module: solace_agent_mesh.agent.sac.app
+    broker:
+      <<: *broker_connection
+
+    app_config:
+      namespace: "${NAMESPACE}"
+      supports_streaming: true
+      agent_name: "TriageAgent"
+      display_name: "Triage Agent"
+      model: *lightweight_model
+
+      instruction: |
+        You are the Triage Agent for ABC Financial's incident response system. When you receive a monitoring alert, you must:
+        
+          1. Parse the alert payload to identify the affected service, host, region, severity, and metric values.
+          2. Classify the incident priority (P1-P4) based on:
+             - P1: Customer-facing revenue-impacting service down or critically degraded
+             - P2: Customer-facing service degraded but functional, or critical internal service affected
+             - P3: Non-critical service degraded, no immediate customer impact
+             - P4: Minor issue, informational, no service impact
+          3. Use the lookup_recent_deployments tool to check if any deployments to the affected service occurred in the last 24 hours. If a deployment correlates with the alert timing, flag it as a potential root
+          cause.
+          4. Produce a structured triage assessment including: incident priority with reasoning, affected service and host details, metric values and thresholds, deployment correlation (if any), and confidence score
+          (high/medium/low).
+        
+          Always provide your reasoning for the priority classification. Be specific about which metrics drove the decision.
+      
+      tools: 
+        - tool_type: builtin-group
+          group_name: artifact_management
+        - tool_type: python
+          tool_description: Look up recent deployments for a service to check for deploy correlation.
+            Use this tool when triaging an alert to determine if a recent deployment to the
+            affected service could be the root cause. Returns   deployment details including
+            version, change summary, commit SHA, and a correlation flag.
+          component_module: modules.incident_agents.deployment_lookup
+          function_name: lookup_recent_deployments
+
+      session_service: 
+        type: "sql"
+        default_behavior: "PERSISTENT"
+        database_url: "${TRIAGE_AGENT_DATABASE_URL, sqlite:///triage_agent.db}"
+      artifact_service: *default_artifact_service
+      
+      artifact_handling_mode: "reference"
+      enable_embed_resolution: true
+      enable_artifact_content_instruction: true
+      data_tools_config: *default_data_tools_config
+      auto_summarization: *default_auto_summarization
+
+      # Agent Card Definition
+      agent_card:
+        description: |
+          Triages monitoring alerts for ABC Financial. Classifies incident priority (P1-P4), identifies affected services, checks for recent deployment correlation, and produces structured triage assessments.
+        defaultInputModes: [text] 
+        defaultOutputModes: [text, file] 
+        skills:
+          - id: lookup_recent_deployments
+            name: Deployment Lookup
+            description: "Checks recent deployment history for the affected service to identify if a recent deploy correlates with the incident timing."
+          - id: alert_triage
+            name: Alert Triage
+            description: "Parses monitoring alerts, classifies incident priority (P1-P4), identifies affected services and hosts, and produces structured triage assessments."
+      
+      # Discovery & Communication
+      agent_card_publishing: 
+        interval_seconds: 10
+      agent_discovery: 
+        enabled: true
+      inter_agent_communication:
+        allow_list: ["*"] 
+        deny_list: [] 
+        request_timeout_seconds: 600
