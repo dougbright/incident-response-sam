@@ -1,0 +1,55 @@
+# Event Mesh Gateway — subscribes to monitoring alert topics on the Solace broker
+# and triggers the OrchestratorAgent when alerts arrive.
+
+log:
+  stdout_log_level: INFO
+  log_file_level: DEBUG
+  log_file: incident-alerts.log
+
+!include ../shared_config.yaml
+
+apps:
+  - name: incident-alerts-app
+    app_module: sam_event_mesh_gateway.app
+    broker:
+      <<: *broker_connection
+
+    app_config:
+      namespace: "${NAMESPACE}"
+      gateway_id: "event-mesh-gw-01"
+
+      artifact_service: *default_artifact_service
+      authorization_service:
+        type: "none"
+      default_user_identity: "anonymous_event_mesh_user"
+
+      # Data plane broker — same dev broker as control plane
+      event_mesh_broker_config:
+        broker_url: ${SOLACE_BROKER_URL, ws://localhost:8008}
+        broker_vpn: ${SOLACE_BROKER_VPN, default}
+        broker_username: ${SOLACE_BROKER_USERNAME, default}
+        broker_password: ${SOLACE_BROKER_PASSWORD, default}
+
+      event_handlers:
+        - name: "alert_handler"
+          subscriptions:
+            - topic: "monitoring/alerts/>"
+              qos: 1
+          input_expression: "template:DATADOG WEBHOOK ALERT:\n{{json://input.payload}}"
+          payload_encoding: "utf-8"
+          payload_format: "json"
+          target_agent_name: "OrchestratorAgent"
+          on_success: "alert_success_handler"
+          on_error: "alert_error_handler"
+
+      output_handlers:
+        - name: "alert_success_handler"
+          topic_expression: "static:monitoring/responses/success"
+          payload_expression: "task_response:text"
+          payload_encoding: "utf-8"
+          payload_format: "text"
+        - name: "alert_error_handler"
+          topic_expression: "static:monitoring/responses/error"
+          payload_expression: "task_response:a2a_task_response.error"
+          payload_encoding: "utf-8"
+          payload_format: "json"

@@ -40,9 +40,14 @@ apps:
 
         Keep the tone calm, professional, and factual. Do not speculate. Do not include specific commands, hostnames, or technical remediation details — those belong in the IAP, not the sitrep.
 
+        After generating the sitrep, use the post_to_slack tool to send it to the incident Slack channel.
+
       tools:
         - tool_type: builtin-group
           group_name: artifact_management
+        - tool_type: python
+          component_module: modules.incident_agents.slack_notify
+          function_name: post_to_slack
 
       session_service:
         type: "sql"

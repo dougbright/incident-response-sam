@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
-Alert Generator — sends simulated Datadog webhook alerts via the SAM Web UI HTTP API.
+Alert Generator — sends simulated Datadog webhook alerts.
 
-Submits alerts using the streaming endpoint so they appear in the web UI,
-then monitors the SSE stream to show progress in the terminal.
+Supports two modes:
+  --mode broker   Publish directly to Solace broker topics (picked up by Event Mesh Gateway)
+  --mode webui    Submit via the SAM Web UI REST API (original behavior)
 
 Usage:
     python alert_generator.py --scenario cpu
-    python alert_generator.py --scenario error-rate
-    python alert_generator.py --scenario disk
-    python alert_generator.py --scenario latency
-    python alert_generator.py --scenario memory
+    python alert_generator.py --scenario cpu --mode webui
     python alert_generator.py --all
 """
 
@@ -202,21 +200,67 @@ SCENARIOS = {
 }
 
 
-def publish_alert(scenario_name: str, api_url: str = "http://127.0.0.1:8000", watch: bool = True):
-    """Send a single alert scenario via the SAM Web UI streaming API."""
-    scenario = SCENARIOS[scenario_name]
-    alert = scenario["alert"].copy()
-
-    now = datetime.now(timezone.utc)
-    epoch = str(int(now.timestamp()))
+def _fill_timestamps(alert: dict) -> dict:
+    """Set date/last_updated to current epoch time."""
+    alert = alert.copy()
+    epoch = str(int(datetime.now(timezone.utc).timestamp()))
     alert["date"] = epoch
     alert["last_updated"] = epoch
+    return alert
+
+
+def publish_via_broker(scenario_name: str, broker_url: str = "ws://localhost:8008"):
+    """Publish alert JSON directly to a Solace broker topic.
+
+    The Event Mesh Gateway subscribes to monitoring/alerts/> and forwards
+    the payload to the OrchestratorAgent automatically.
+    """
+    from solace.messaging.messaging_service import MessagingService
+    from solace.messaging.resources.topic import Topic
+
+    scenario = SCENARIOS[scenario_name]
+    alert = _fill_timestamps(scenario["alert"])
+    topic_str = scenario["topic"]
+
+    # Parse broker URL into host/port for the Solace PubSub+ SDK
+    broker_props = {
+        "solace.messaging.transport.host": broker_url,
+        "solace.messaging.service.vpn-name": "default",
+        "solace.messaging.authentication.scheme.basic.username": "default",
+        "solace.messaging.authentication.scheme.basic.password": "default",
+    }
+
+    service = MessagingService.builder().from_properties(broker_props).build()
+    service.connect()
+
+    publisher = service.create_direct_message_publisher_builder().build()
+    publisher.start()
+
+    payload = json.dumps(alert, indent=2)
+    topic = Topic.of(topic_str)
+
+    print(f"Publishing {scenario_name} alert to broker topic: {topic_str}")
+    print(f"  Title: {alert['title']}")
+    print(f"  Host: {alert['host']}")
+
+    publisher.publish(message=payload, destination=topic)
+
+    print(f"  -> Published. The Event Mesh Gateway will pick this up.")
+    print(f"  -> Watch progress in the web UI: http://127.0.0.1:8000")
+
+    publisher.terminate()
+    service.disconnect()
+
+
+def publish_via_webui(scenario_name: str, api_url: str = "http://127.0.0.1:8000", watch: bool = True):
+    """Send alert via the SAM Web UI streaming API."""
+    scenario = SCENARIOS[scenario_name]
+    alert = _fill_timestamps(scenario["alert"])
 
     alert_text = f"DATADOG WEBHOOK ALERT:\n{json.dumps(alert, indent=2)}"
 
     session_id = f"alert-session-{uuid.uuid4().hex[:8]}"
 
-    # Use message:stream so the web UI can track this task
     payload = {
         "jsonrpc": "2.0",
         "id": str(uuid.uuid4()),
@@ -257,7 +301,6 @@ def publish_alert(scenario_name: str, api_url: str = "http://127.0.0.1:8000", wa
     result = resp.json()
     task_id = None
 
-    # Extract task ID from response
     if "result" in result:
         task_obj = result["result"]
         if isinstance(task_obj, dict):
@@ -273,7 +316,6 @@ def publish_alert(scenario_name: str, api_url: str = "http://127.0.0.1:8000", wa
     if not watch:
         return
 
-    # Subscribe to SSE stream to monitor progress
     print(f"\n  Monitoring task progress (Ctrl+C to stop)...\n")
     try:
         sse_resp = requests.get(
@@ -298,12 +340,10 @@ def publish_alert(scenario_name: str, api_url: str = "http://127.0.0.1:8000", wa
 
                 _print_event(event_type, data)
 
-                # Check if task is complete
                 if _is_final_event(event_type, data):
                     print("\n  Task completed.")
                     return
             elif line.startswith(":"):
-                # SSE comment (e.g., connection established)
                 pass
 
     except KeyboardInterrupt:
@@ -323,7 +363,6 @@ def _print_event(event_type: str, data: dict):
         else:
             text = str(message)
         if text:
-            # Truncate long status messages
             if len(text) > 200:
                 text = text[:200] + "..."
             print(f"  [{state}] {text}")
@@ -374,14 +413,25 @@ def main():
         help="Publish all scenarios with a 3-second delay between each",
     )
     parser.add_argument(
+        "--mode",
+        choices=["broker", "webui"],
+        default="broker",
+        help="Delivery mode: 'broker' publishes to Solace topic (default), 'webui' uses REST API",
+    )
+    parser.add_argument(
         "--api-url",
         default="http://127.0.0.1:8000",
-        help="SAM Web UI API URL (default: http://127.0.0.1:8000)",
+        help="SAM Web UI API URL for webui mode (default: http://127.0.0.1:8000)",
+    )
+    parser.add_argument(
+        "--broker-url",
+        default="ws://localhost:8008",
+        help="Solace broker URL for broker mode (default: ws://localhost:8008)",
     )
     parser.add_argument(
         "--no-watch",
         action="store_true",
-        help="Don't monitor SSE stream (fire and forget)",
+        help="Don't monitor SSE stream (webui mode only)",
     )
 
     args = parser.parse_args()
@@ -390,14 +440,17 @@ def main():
         parser.print_help()
         return
 
-    if args.all:
-        for name in ["cpu", "error-rate", "disk", "latency", "memory"]:
-            publish_alert(name, args.api_url, watch=not args.no_watch)
-            if name != "memory":
-                print("  Waiting 3 seconds...")
-                time.sleep(3)
-    else:
-        publish_alert(args.scenario, args.api_url, watch=not args.no_watch)
+    scenarios = list(SCENARIOS.keys()) if args.all else [args.scenario]
+
+    for i, name in enumerate(scenarios):
+        if args.mode == "broker":
+            publish_via_broker(name, args.broker_url)
+        else:
+            publish_via_webui(name, args.api_url, watch=not args.no_watch)
+
+        if args.all and i < len(scenarios) - 1:
+            print("  Waiting 3 seconds...")
+            time.sleep(3)
 
 
 if __name__ == "__main__":
