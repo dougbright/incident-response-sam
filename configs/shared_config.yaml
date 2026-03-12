@@ -25,10 +25,16 @@ shared_config:
       # max_tokens: ${MAX_TOKENS, 16000} # Set a reasonable max token limit for planning
       # temperature: 0.1 # Lower temperature for more deterministic planning
 
-    # Gemini Flash — used by TriageAgent & NotificationAgent
+    # Gemini Flash — used by TriageAgent
     lightweight: &lightweight_model
       model: "gemini/gemini-2.5-flash"
       api_key: ${GEMINI_API_KEY}
+      cache_strategy: "none"
+
+    # OpenAI o4-mini — used by NotificationAgent (reasoning model, reliable tool-calling)
+    notification: &notification_model
+      model: "openai/o4-mini"
+      api_key: ${OPENAI_API_KEY}
       cache_strategy: "none"
 
     # OpenAI GPT-5-mini — used by RunbookAgent

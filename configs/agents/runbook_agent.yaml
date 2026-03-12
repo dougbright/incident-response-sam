@@ -65,7 +65,7 @@ apps:
       # Agent Card Definition
       agent_card:
         description: |
-          Searches the knowledge base for matching runbooks based on incident symptoms. Reads the runbook index, selects the best match, and returns the full runbook content with attribution.
+          Searches the knowledge base index for the runbook that best matches the incident symptoms and alert type. Returns the runbook filename and reasoning so the Remediation Agent can read and apply it.
         defaultInputModes: [text] 
         defaultOutputModes: [text, file] 
         skills:

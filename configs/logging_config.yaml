@@ -37,6 +37,10 @@ loggers:
     level: ${LOGGING_SAM_LEVEL, INFO}
     handlers: []
 
+  solace_agent_mesh.agent.protocol.event_handlers:
+    level: ${LOGGING_SAM_EVENT_HANDLERS_LEVEL, WARNING}
+    handlers: []
+
   sam_trace:
     level: ${LOGGING_SAM_TRACE_LEVEL, INFO}
     handlers: []

@@ -39,6 +39,7 @@ apps:
           payload_encoding: "utf-8"
           payload_format: "json"
           target_agent_name: "OrchestratorAgent"
+          default_user_identity: "anonymous_event_mesh_user"
           on_success: "alert_success_handler"
           on_error: "alert_error_handler"
 

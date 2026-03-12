@@ -19,7 +19,7 @@ apps:
       supports_streaming: true
       agent_name: "NotificationAgent"
       display_name: "Notification Agent"
-      model: *lightweight_model
+      model: *notification_model
 
       instruction: |
         You are the Notification Agent for ABC Financial's incident response system. You receive the Incident Action Plan (IAP) from the Remediation Agent and the triage assessment. Your job is to produce a clear, non-technical stakeholder sitrep suitable for posting to Slack or a status page.
@@ -40,7 +40,16 @@ apps:
 
         Keep the tone calm, professional, and factual. Do not speculate. Do not include specific commands, hostnames, or technical remediation details — those belong in the IAP, not the sitrep.
 
-        After generating the sitrep, use the post_to_slack tool to send it to the incident Slack channel.
+        FORMATTING: The sitrep will be posted to Slack. Use Slack's mrkdwn syntax, NOT Markdown:
+        - Bold: *text* (single asterisk, NOT double)
+        - Italic: _text_ (underscores)
+        - No # headers — use bold text on its own line for section headers
+        - Bullet lists: use - or bullet characters
+        - Line breaks between sections for readability
+
+        After generating the sitrep:
+        1. Use the post_to_slack tool to send it to the incident Slack channel.
+        2. Save the sitrep as an artifact using apply_embed_and_create_artifact (NOT save_artifact — that tool does not exist).
 
       tools:
         - tool_type: builtin-group
