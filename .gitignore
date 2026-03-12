@@ -11,3 +11,5 @@ build
 *.log
 trace_*.txt
 /tmp/
+configs/.DS_Store
+CLAUDE.md
