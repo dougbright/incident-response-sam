@@ -31,10 +31,10 @@ shared_config:
       api_key: ${GEMINI_API_KEY}
       cache_strategy: "none"
 
-    # OpenAI o4-mini — used by NotificationAgent (reasoning model, reliable tool-calling)
+    # Anthropic Claude Haiku 4.5 — used by NotificationAgent
     notification: &notification_model
-      model: "openai/o4-mini"
-      api_key: ${OPENAI_API_KEY}
+      model: "anthropic/claude-haiku-4-5-20251001"
+      api_key: ${LLM_SERVICE_API_KEY}
       cache_strategy: "none"
 
     # OpenAI GPT-5-mini — used by RunbookAgent

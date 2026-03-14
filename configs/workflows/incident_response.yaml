@@ -117,9 +117,7 @@ apps:
         output_mapping:
           triage_assessment: "{{triage.output}}"
           runbook: "{{runbook.output}}"
-          initial_notification: "{{notification_initial.output}}"
           incident_action_plan: "{{remediation.output}}"
-          stakeholder_sitrep: "{{notification_final.output}}"
 
         skills:
           - id: "incident_response"

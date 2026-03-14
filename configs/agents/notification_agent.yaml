@@ -48,7 +48,10 @@ apps:
         - Bullet lists: use - or bullet characters
         - Line breaks between sections for readability
 
-        After generating the sitrep, use the post_to_slack tool to send it to the incident Slack channel.
+        COMPLETING YOUR TASK — follow these steps in order:
+        1. Call post_to_slack with the sitrep text to send it to the incident Slack channel.
+        2. After post_to_slack returns, save the sitrep as your output artifact using the filename the system specified. This is mandatory — the workflow will fail without it.
+        3. End your response with the result embed: «result:artifact=<filename> status=success»
 
       tools:
         - tool_type: builtin-group
