@@ -20,7 +20,8 @@ apps:
       supports_streaming: true
       agent_name: "OrchestratorAgent"
       display_name: "OrchestratorAgent"
-      model: *planning_model 
+      model: *planning_model
+      max_llm_calls_per_task: 1000
 
       instruction: |
         You are the Orchestrator Agent within an AI agentic system. Your primary responsibilities are to:

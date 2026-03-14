@@ -20,6 +20,7 @@ apps:
       agent_name: "TriageAgent"
       display_name: "Triage Agent"
       model: *lightweight_model
+      max_llm_calls_per_task: 1000
 
       instruction: |
         You are the Triage Agent for ABC Financial's incident response system. When you receive a monitoring alert, you must:

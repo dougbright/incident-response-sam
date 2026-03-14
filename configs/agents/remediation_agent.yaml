@@ -20,6 +20,7 @@ apps:
       agent_name: "RemediationAgent"
       display_name: "Remediation Agent"
       model: *general_model
+      max_llm_calls_per_task: 1000
 
       instruction: |
         You are the Remediation Agent for ABC Financial's incident response system. You receive two inputs: a triage assessment from the Triage Agent and runbook metadata from the Runbook Agent (which includes the runbook filename and reason for selection).
@@ -50,7 +51,7 @@ apps:
             args:
             - -y
             - '@modelcontextprotocol/server-filesystem'
-            - /Users/dbright/solace/incident-response/knowledge-base
+            - /home/ubuntu/solace/incident-response/knowledge-base
             timeout: 30
 
       session_service:

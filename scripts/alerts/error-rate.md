@@ -1,4 +1,4 @@
-DATADOG WEBHOOK ALERT:
+
 {
   "title": "[Triggered] Error rate spike on auth-service in us-east-1",
   "host": "prod-auth-03.us-east-1.internal",

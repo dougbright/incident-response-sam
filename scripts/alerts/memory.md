@@ -1,4 +1,3 @@
-DATADOG WEBHOOK ALERT:
 {
   "title": "[Triggered] Memory utilization critical on settlement-engine in us-east-1",
   "host": "prod-se-01.us-east-1.internal",

@@ -20,6 +20,7 @@ apps:
       agent_name: "NotificationAgent"
       display_name: "Notification Agent"
       model: *notification_model
+      max_llm_calls_per_task: 1000
 
       instruction: |
         You are the Notification Agent for ABC Financial's incident response system. You receive the Incident Action Plan (IAP) from the Remediation Agent and the triage assessment. Your job is to produce a clear, non-technical stakeholder sitrep suitable for posting to Slack or a status page.

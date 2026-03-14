@@ -1,4 +1,4 @@
-DATADOG WEBHOOK ALERT:
+
 {
   "title": "[Triggered] Disk utilization warning on log-aggregator in us-east-1",
   "host": "prod-log-02.us-east-1.internal",

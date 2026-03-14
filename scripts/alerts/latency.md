@@ -1,4 +1,4 @@
-DATADOG WEBHOOK ALERT:
+
 {
   "title": "[Triggered] P99 latency degradation on order-gateway in us-east-1",
   "host": "prod-og-05.us-east-1.internal",

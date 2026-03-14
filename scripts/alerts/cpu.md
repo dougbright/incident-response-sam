@@ -1,4 +1,3 @@
-DATADOG WEBHOOK ALERT:
 {
   "title": "[Triggered] CPU utilization critical on payment-processor in us-east-1",
   "host": "prod-pp-07.us-east-1.internal",
